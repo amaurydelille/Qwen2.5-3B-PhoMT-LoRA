@@ -9,6 +9,7 @@ import torch.nn as nn
 import math
 import logging
 import os
+import safetensors
 
 logging.basicConfig(level=logging.INFO)
 
@@ -23,7 +24,7 @@ EPOCHS = 3
 LEARNING_RATE = 1e-4
 R = 8
 ALPHA = 16
-
+N_EXAMPLES = 10000
 class Utils:
     @staticmethod
     def load_dataset() -> Dataset:
@@ -36,7 +37,9 @@ class Utils:
                 answer = vi_line.strip()
                 dataset_formatted["instruction"].append(instruction)
                 dataset_formatted["answer"].append(answer)
-        return Dataset.from_dict(dataset_formatted)
+        dataset = Dataset.from_dict(dataset_formatted)
+        logging.info(f"Dataset loaded with {len(dataset)} examples")
+        return dataset
 
 class LoRALinear(nn.Module):
     def __init__(self, in_features: int, out_features: int, r: int, alpha=16, bias=True, dtype=torch.float32) -> None:
@@ -118,7 +121,8 @@ class LoRAFineTuner:
                     bias=original.bias is not None,
                     dtype=original.weight.dtype
                 )
-
+                
+                lora_layer = lora_layer.to(original.weight.device)
                 lora_layer.weight.data = original.weight.data.clone()
                 if original.bias is not None:
                     lora_layer.bias.data = original.bias.data.clone()
@@ -171,9 +175,7 @@ class LoRAFineTuner:
         self.model = self.replace_linear_with_lora(self.model, target_names=["q_proj", "k_proj", "v_proj", "o_proj"], r=self.r, alpha=self.alpha)
         logging.info("Freezing model...")
         self.freeze_model(self.model)
-        logging.info("Moving model to device...")
-        self.model.to(DEVICE)
-        logging.info("Setting model to train mode...")
+        logging.info(f"Model is on device: {next(self.model.parameters()).device}")
         self.model.train()
 
         logging.info("Tokenizing dataset...")
@@ -210,15 +212,19 @@ class LoRAFineTuner:
         return self.model
     
     def save_model(self, path: str) -> None:
-        self.model.save_pretrained(path)
+        self.model.save_pretrained(path, safetensors=True)
         self.tokenizer.save_pretrained(path)
+        
 
 if __name__ == "__main__":
+    logging.info(f"Using device: {DEVICE}")
     logging.info("Loading dataset...")
-    dataset = Utils.load_dataset()
+    dataset = Utils.load_dataset().select(range(N_EXAMPLES))
     logging.info("Loading model...")
-    model = AutoModelForCausalLM.from_pretrained(BASE_MODEL_ID)
+    model = AutoModelForCausalLM.from_pretrained(BASE_MODEL_ID, torch_dtype=torch.bfloat16 if DEVICE != "cpu" else torch.float32)
+    model.to(DEVICE)
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_ID)
+    logging.info(f"Model loaded on device: {next(model.parameters()).device}")
     finetuner = LoRAFineTuner(
         model=model, 
         dataset=dataset,

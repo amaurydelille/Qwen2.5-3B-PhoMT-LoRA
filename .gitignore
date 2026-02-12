@@ -1,0 +1,9 @@
+dataset/tokenized/
+dataset/PhoMT/
+lora_model/
+*.arrow
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
