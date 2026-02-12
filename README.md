@@ -1,4 +1,25 @@
-Qwen/Qwen2.5-3B fine-tuned on vinai/PhoMT dataset (10000 rows only).
+---
+language:
+- en
+- vi
+license: apache-2.0
+tags:
+- translation
+- machine-translation
+- en-vi
+- qwen
+- lora
+- phomt
+base_model: Qwen/Qwen2.5-3B
+datasets:
+- vinai/PhoMT
+library_name: transformers
+pipeline_tag: translation
+---
+
+# Qwen2.5-3B-PhoMT-LoRA
+
+Qwen/Qwen2.5-3B fine-tuned with LoRA on vinai/PhoMT dataset (10000 rows only) for English to Vietnamese translation.
 
 ## Usage
 
