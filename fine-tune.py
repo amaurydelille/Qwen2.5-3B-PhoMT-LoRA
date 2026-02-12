@@ -9,7 +9,6 @@ import torch.nn as nn
 import math
 import logging
 import os
-import safetensors
 
 logging.basicConfig(level=logging.INFO)
 
