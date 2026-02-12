@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import math
 import logging
+import os
 
 logging.basicConfig(level=logging.INFO)
 
@@ -15,6 +16,7 @@ BASE_MODEL_ID = "Qwen/Qwen2.5-3B"
 DATASET_PATH = "dataset/"
 EN_SENTS_PATH = DATASET_PATH + "en_sents"
 VI_SENTS_PATH = DATASET_PATH + "vi_sents"
+TOKENIZED_DATASET_PATH = DATASET_PATH + "tokenized"
 DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 BATCH_SIZE = 8
 EPOCHS = 3
@@ -37,7 +39,7 @@ class Utils:
         return Dataset.from_dict(dataset_formatted)
 
 class LoRALinear(nn.Module):
-    def __init__(self, in_features: int, out_features: int, r: int, alpha=16, bias=True) -> None:
+    def __init__(self, in_features: int, out_features: int, r: int, alpha=16, bias=True, dtype=torch.float32) -> None:
         super().__init__()
 
         self.in_features = in_features
@@ -45,18 +47,18 @@ class LoRALinear(nn.Module):
         self.r = r
         self.alpha = alpha
         
-        self.weight = nn.Parameter(torch.empty(out_features, in_features))
+        self.weight = nn.Parameter(torch.empty(out_features, in_features, dtype=dtype))
         self.weight.requires_grad = False
 
         if bias:
-            self.bias = nn.Parameter(torch.zeros(out_features))
+            self.bias = nn.Parameter(torch.zeros(out_features, dtype=dtype))
             self.bias.requires_grad = False
         else:
             self.bias = None
 
         if r > 0:
-            self.A = nn.Parameter(torch.randn(r, in_features) * 0.01)
-            self.B = nn.Parameter(torch.zeros(out_features, r))
+            self.A = nn.Parameter(torch.randn(r, in_features, dtype=dtype) * 0.01)
+            self.B = nn.Parameter(torch.zeros(out_features, r, dtype=dtype))
 
             self.scaling = alpha / r
         else:
@@ -113,7 +115,8 @@ class LoRAFineTuner:
                     original.out_features,
                     r=r,
                     alpha=alpha,
-                    bias=original.bias is not None
+                    bias=original.bias is not None,
+                    dtype=original.weight.dtype
                 )
 
                 lora_layer.weight.data = original.weight.data.clone()
@@ -125,6 +128,13 @@ class LoRAFineTuner:
         return model
 
     def tokenize_dataset(self, dataset: Dataset) -> Dataset:
+        if os.path.exists(TOKENIZED_DATASET_PATH):
+            logging.info(f"Loading tokenized dataset from {TOKENIZED_DATASET_PATH}")
+            tokenized_dataset = Dataset.load_from_disk(TOKENIZED_DATASET_PATH)
+            tokenized_dataset.set_format(type="torch")
+            return tokenized_dataset
+        
+        logging.info("Tokenizing dataset...")
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         
@@ -134,6 +144,10 @@ class LoRAFineTuner:
         
         tokenized_dataset = dataset.map(tokenize_function, batched=True, remove_columns=dataset.column_names)
         tokenized_dataset.set_format(type="torch")
+        
+        logging.info(f"Saving tokenized dataset to {TOKENIZED_DATASET_PATH}")
+        tokenized_dataset.save_to_disk(TOKENIZED_DATASET_PATH)
+        
         return tokenized_dataset
     
     def freeze_model(self, model: nn.Module) -> None:
