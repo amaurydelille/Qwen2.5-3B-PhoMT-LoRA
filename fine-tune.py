@@ -9,6 +9,7 @@ import torch.nn as nn
 import math
 import logging
 import os
+import safetensors
 
 logging.basicConfig(level=logging.INFO)
 
@@ -211,9 +212,10 @@ class LoRAFineTuner:
         return self.model
     
     def save_model(self, path: str) -> None:
-        self.model.save_pretrained(path, safetensors=True)
+        self.model.save_pretrained(path)
+        safetensors.save_file(self.model.state_dict(), path + "/model.safetensors")
         self.tokenizer.save_pretrained(path)
-        
+        logging.info(f"Model saved to {path} successfully")
 
 if __name__ == "__main__":
     logging.info(f"Using device: {DEVICE}")
