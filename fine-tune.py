@@ -9,7 +9,7 @@ import torch.nn as nn
 import math
 import logging
 import os
-import safetensors
+from safetensors.torch import save_file
 
 logging.basicConfig(level=logging.INFO)
 
@@ -19,8 +19,8 @@ EN_SENTS_PATH = DATASET_PATH + "en_sents"
 VI_SENTS_PATH = DATASET_PATH + "vi_sents"
 TOKENIZED_DATASET_PATH = DATASET_PATH + "tokenized"
 DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-BATCH_SIZE = 8
-EPOCHS = 3
+BATCH_SIZE = 16
+EPOCHS = 2
 LEARNING_RATE = 1e-4
 R = 8
 ALPHA = 16
@@ -213,7 +213,7 @@ class LoRAFineTuner:
     
     def save_model(self, path: str) -> None:
         self.model.save_pretrained(path)
-        safetensors.save_file(self.model.state_dict(), path + "/model.safetensors")
+        save_file(self.model.state_dict(), path + "/model.safetensors")
         self.tokenizer.save_pretrained(path)
         logging.info(f"Model saved to {path} successfully")
 
